@@ -1,0 +1,161 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PrivacyShield — Enroll</title>
+  <style>
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+      padding: 16px; 
+      width: 380px;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    h3 { 
+      margin: 0 0 12px 0; 
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    button { 
+      padding: 10px 16px; 
+      margin: 6px 4px 6px 0; 
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #enrollBtn {
+      background: #667eea;
+      color: white;
+    }
+    #enrollBtn:hover {
+      background: #5568d3;
+    }
+    #clearBtn {
+      background: #e0e0e0;
+      color: #333;
+    }
+    #clearBtn:hover {
+      background: #d0d0d0;
+    }
+    #videoPreview { 
+      width: 100%; 
+      border-radius: 8px; 
+      background: #000;
+      display: none;
+    }
+    #videoPreview.active {
+      display: block;
+    }
+    #status { 
+      margin: 12px 0; 
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    #statusText {
+      font-weight: 600;
+      color: #667eea;
+    }
+    .monitoring-section {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f0f9ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+    }
+    .monitoring-section h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #1e40af;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .monitoring-section p {
+      margin: 4px 0;
+      font-size: 12px;
+      color: #475569;
+      line-height: 1.5;
+    }
+    .instruction-box {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .instruction-box strong {
+      color: #f59e0b;
+    }
+    #activeTabsList {
+      margin-top: 8px;
+      font-size: 12px;
+    }
+    .tab-item {
+      padding: 6px 8px;
+      background: white;
+      border-radius: 4px;
+      margin: 4px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tab-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+    #logArea { 
+      font-size: 11px;
+      color: #666;
+      margin-top: 12px;
+      max-height: 120px;
+      overflow-y: auto;
+      background: #f9f9f9;
+      padding: 8px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h3>🛡️ PrivacyShield</h3>
+    <div id="status">Status: <span id="statusText">Idle</span></div>
+    <video id="videoPreview" autoplay playsinline muted></video>
+    <div style="margin-top:12px">
+      <button id="enrollBtn">Enroll Face</button>
+      <button id="clearBtn">Clear Enrollment</button>
+    </div>
+    
+    <div class="monitoring-section" id="monitoringSection" style="display: none;">
+      <h4>👁️ Monitoring Status</h4>
+      <p id="monitoringStatus">Waiting for enrollment...</p>
+      <div id="activeTabsList"></div>
+    </div>
+
+    <div class="instruction-box" id="instructionBox" style="display: none;">
+      <strong>✅ Enrollment Complete!</strong><br>
+      <strong>Next Step:</strong> Navigate to any webpage (like Google, YouTube, etc.) to start monitoring. You'll see a status widget in the bottom-right corner of the page.
+    </div>
+    
+    <div id="logArea"></div>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

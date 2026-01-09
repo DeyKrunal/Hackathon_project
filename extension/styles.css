@@ -1,0 +1,4 @@
+/* Simple styles for overlay & popup (if needed) */
+#privacyshield-blur-overlay {
+  transition: opacity 200ms ease;
+}
