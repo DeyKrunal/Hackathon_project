@@ -1,88 +1,10 @@
+// Privacy Shield AI - Background Service Worker
+// Central controller for the extension
+
 let isMonitoring = false;
+let creatingOffscreen = null;
 
-// Unified message listener to handle all actions
-chrome.runtime.onMessage.addListener(async (message) => {
-  switch (message.type || message.action) {
-    case 'DETECTION_RESULT':
-      handleBlurLogic(message.shouldBlur);
-      break;
-
-    case 'START_MONITORING':
-      const data = await chrome.storage.local.get(['isRegistered', 'enrolledFace']);
-      if (!data.isRegistered || !data.enrolledFace) {
-        console.log("Not registered. Redirecting...");
-        chrome.tabs.create({ url: 'register.html' });
-      } else {
-        await startMonitoringFlow();
-      }
-      break;
-
-    case 'STOP_MONITORING':
-      await stopMonitoringFlow();
-      break;
-
-    case 'ENROLLMENT_COMPLETE':
-      console.log("Enrollment success. Initializing AI...");
-      chrome.notifications.create({
-        type: 'basic',
-        title: "Enrollment Successful",
-        message: "Enrollment Successful Done! AI monitoring is starting."
-      });
-      await startMonitoringFlow(); // Now it starts the camera
-      break;
-
-    case 'SHOW_NOTIFICATION':
-      chrome.notifications.create({
-        type: 'basic',
-        title: message.title,
-        message: message.message
-      });
-      break;
-  }
-});
-
-// 2. Filter Blur Commands by Site List
-async function handleBlurLogic(shouldBlur) {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !tab.id || tab.url.startsWith('chrome://')) return;
-
-    // Get the user's protected site list from storage
-    const { siteList = [] } = await chrome.storage.local.get('siteList');
-
-    // Check if the current tab URL matches any site in the user's list
-    const isProtectedSite = siteList.some(site => tab.url.includes(site));
-
-    // Only send the blur/unblur command if the site is in the list
-    if (isProtectedSite) {
-      chrome.tabs.sendMessage(tab.id, { action: shouldBlur ? "BLUR" : "UNBLUR" })
-        .catch(() => console.warn("Content script not ready."));
-    } else {
-      // Force unblur if user navigates away from a protected site
-      chrome.tabs.sendMessage(tab.id, { action: "UNBLUR" }).catch(() => {});
-    }
-  } catch (err) {
-    console.error("Filtering error:", err);
-  }
-}
-
-// ... (Your existing startMonitoringFlow and ensureOffscreenDocument functions)
-
-async function startMonitoringFlow() {
-  // Prime camera permission: Check if already granted
-  // Service Workers can't call getUserMedia, so we check status via Permissions API
-  const permissionStatus = await navigator.permissions.query({ name: 'camera' });
-
-  if (permissionStatus.state !== 'granted') {
-    console.log("Camera permission not granted. Opening setup page...");
-    // Create a visible tab to ask the user for camera access
-    chrome.tabs.create({ url: 'setup.html' });
-  } else {
-    // Permission is already granted, create the offscreen document
-    await ensureOffscreenDocument();
-  }
-}
-
+// Ensure offscreen document exists
 async function ensureOffscreenDocument() {
   const offscreenUrl = chrome.runtime.getURL('offscreen.html');
   const existingContexts = await chrome.runtime.getContexts({
@@ -90,40 +12,128 @@ async function ensureOffscreenDocument() {
     documentUrls: [offscreenUrl]
   });
 
-  if (existingContexts.length > 0) return;
-
-  await chrome.offscreen.createDocument({
-    url: 'offscreen.html',
-    reasons: ['USER_MEDIA'],
-    justification: 'Real-time face detection for screen privacy'
-  });
-
-  // WAIT for the document to load, then push the data
-  const data = await chrome.storage.local.get('enrolledFace');
-  // Small delay to ensure offscreen.js is listening
-  setTimeout(() => {
-    chrome.runtime.sendMessage({
-      action: "PUSH_ENROLLED_DATA",
-      enrolledFace: data.enrolledFace
-    });
-  }, 1000);
-}
-
-async function stopMonitoringFlow() {
-  // 1. Tell offscreen to stop camera tracks immediately
-  chrome.runtime.sendMessage({ action: 'STOP_AI' }).catch(() => {
-    // Catch error if offscreen is already closed
-  });
-
-  // 2. Close the offscreen context entirely
-  if (await chrome.offscreen.hasDocument()) {
-    await chrome.offscreen.closeDocument();
-    console.log("Offscreen document closed.");
+  if (existingContexts.length > 0) {
+    console.log('Offscreen document already exists.');
+    return;
   }
 
-  // 3. Force unblur on all tabs when stopping
-  const tabs = await chrome.tabs.query({});
-  tabs.forEach(tab => {
-    chrome.tabs.sendMessage(tab.id, { action: "UNBLUR" }).catch(() => {});
-  });
+  if (creatingOffscreen) {
+    await creatingOffscreen;
+  } else {
+    creatingOffscreen = chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: [chrome.offscreen.Reason.WORKERS, chrome.offscreen.Reason.USER_MEDIA],
+      justification: 'MediaPipe FaceLandmarker for AI engine operations and camera access.'
+    });
+    await creatingOffscreen;
+    creatingOffscreen = null;
+    console.log('Offscreen document created successfully.');
+  }
 }
+
+// Start monitoring process
+async function startMonitoring() {
+  try {
+    // Check if user is registered
+    const result = await chrome.storage.local.get(['isRegistered', 'enrolledFace']);
+
+    if (!result.isRegistered || !result.enrolledFace) {
+      // Open registration page
+      chrome.tabs.create({ url: chrome.runtime.getURL('register.html') });
+      return;
+    }
+
+    // Ensure offscreen document exists
+    await ensureOffscreenDocument();
+
+    // Initialize FaceLandmarker in offscreen document
+    await chrome.runtime.sendMessage({ type: 'INIT_FACELANDMARKER_IN_OFFSCREEN' });
+
+    // Push enrolled face data to offscreen document
+    await chrome.runtime.sendMessage({
+      type: 'PUSH_DATA',
+      payload: { enrolledFace: result.enrolledFace }
+    });
+
+    isMonitoring = true;
+    console.log('Monitoring started successfully.');
+  } catch (error) {
+    console.error('Error starting monitoring:', error);
+  }
+}
+
+// Stop monitoring process
+async function stopMonitoring() {
+  try {
+    await chrome.runtime.sendMessage({ type: 'STOP_MONITORING' });
+    isMonitoring = false;
+    console.log('Monitoring stopped.');
+  } catch (error) {
+    console.error('Error stopping monitoring:', error);
+  }
+}
+
+// Check if current tab URL is in site list
+async function shouldBlurCurrentTab(shouldBlur) {
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!activeTab || !activeTab.url) return;
+
+    const result = await chrome.storage.local.get(['siteList']);
+    const siteList = result.siteList || [];
+
+    // Extract domain from URL
+    const url = new URL(activeTab.url);
+    const domain = url.hostname.replace('www.', '');
+
+    // Check if current domain is in site list
+    const isProtectedSite = siteList.some(site => domain.includes(site));
+
+    if (isProtectedSite) {
+      // Send blur/unblur message to content script
+      const action = shouldBlur ? 'BLUR' : 'UNBLUR';
+      chrome.tabs.sendMessage(activeTab.id, { type: action }).catch(err => {
+        console.log('Content script not ready yet:', err);
+      });
+    }
+  } catch (error) {
+    console.error('Error checking tab URL:', error);
+  }
+}
+
+// Listen for messages
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'START_MONITORING') {
+    startMonitoring().then(() => sendResponse({ success: true }));
+    return true;
+  } else if (message.type === 'STOP_MONITORING_REQUEST') {
+    stopMonitoring().then(() => sendResponse({ success: true }));
+    return true;
+  } else if (message.type === 'DETECTION_RESULT') {
+    if (isMonitoring && message.payload) {
+      shouldBlurCurrentTab(message.payload.shouldBlur);
+    }
+    sendResponse({ success: true });
+    return true;
+  } else if (message.type === 'GET_MONITORING_STATUS') {
+    sendResponse({ isMonitoring });
+    return true;
+  }
+});
+
+// Listen for tab changes to re-evaluate blur status
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  if (isMonitoring) {
+    // Trigger a detection result check for the new tab
+    // The offscreen document will continue sending results
+  }
+});
+
+// Listen for tab URL changes
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (isMonitoring && changeInfo.url) {
+    // Re-evaluate blur status when URL changes
+  }
+});
+
+console.log('Privacy Shield AI - Background service worker loaded.');

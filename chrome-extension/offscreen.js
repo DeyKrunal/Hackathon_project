@@ -1,312 +1,194 @@
-// import { FaceLandmarker, FilesetResolver } from "./js-file/vision_bundle.js";
+// Privacy Shield AI - Offscreen Document (AI Engine)
+// Handles MediaPipe Face Landmarker and identity verification
 
-// let faceLandmarker;
-// let video;
-// let stream;
-// let enrolledFaceData = null;
+let faceLandmarker = null;
+let enrolledFaceLandmarks = null;
+let videoStream = null;
+let animationFrameId = null;
+let lastVideoTime = -1;
 
-// chrome.runtime.onMessage.addListener((message) => {
-//   if (message.action === "PUSH_ENROLLED_DATA") {
-//     enrolledFaceData = message.enrolledFace;
-//     console.log("Face data synced from background!");
-    
-//     // Only start the AI once we have the data
-//     if (!faceLandmarker) initAI(); 
-//   }
-// });
+// Loads MediaPipe as a module and exposes globals
+async function loadMediaPipe() {
+    if (window.MediaPipeLoaded) return; // Already loaded
 
-// async function initAI() {
-//   console.log("Initializing AI engine...");
-
-//   try {
-//     // Use the Promise-based await for cleaner execution
-//     const data = await chrome.storage.local.get(["enrolledFace"]);
-    
-//     if (data && data.enrolledFace) {
-//       enrolledFaceData = data.enrolledFace;
-//       console.log("Authorized face data successfully loaded from storage.");
-//     } else {
-//       console.warn("No enrolled face found. AI will treat everyone as a stranger.");
-//     }
-
-//     const vision = await FilesetResolver.forVisionTasks("./js-file");
-//     faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-//       baseOptions: {
-//         modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
-//         delegate: "GPU"
-//       },
-//       runningMode: "VIDEO",
-//       numFaces: 2 
-//     });
-
-//     startCamera();
-//   } catch (error) {
-//     console.error("Critical error during AI initialization:", error);
-//   }
-// }
-
-// // 2. Camera Management
-// async function startCamera() {
-//   video = document.getElementById('webcam');
-//   try {
-//     stream = await navigator.mediaDevices.getUserMedia({ video: true });
-//     video.srcObject = stream;
-//     video.addEventListener('loadeddata', predictWebcam);
-//   } catch (err) {
-//     console.error("Camera access denied in offscreen doc:", err);
-//   }
-// }
-
-// function stopCamera() {
-//   if (stream) {
-//     stream.getTracks().forEach(track => track.stop());
-//     video.srcObject = null;
-//     console.log("Camera hardware released.");
-//   }
-// }
-
-// // Listen for stop commands from background.js
-// chrome.runtime.onMessage.addListener((message) => {
-//   if (message.action === 'STOP_AI') {
-//     stopCamera();
-//   }
-// });
-
-// // 3. Face Comparison Logic (Identity Verification)
-// function isAuthorizedUser(liveFace) {
-//   if (!enrolledFaceData || !liveFace) return false;
-
-//   let totalDistance = 0;
-//   // We compare key landmarks (eyes, nose, mouth, jawline)
-//   const pointsToCompare = [1, 4, 152, 33, 263, 61, 291]; 
-
-//   pointsToCompare.forEach(index => {
-//     const p1 = liveFace[index];
-//     const p2 = enrolledFaceData[index];
-//     // Calculate Euclidean distance in 3D space
-//     const dist = Math.sqrt(
-//       Math.pow(p1.x - p2.x, 2) + 
-//       Math.pow(p1.y - p2.y, 2) + 
-//       Math.pow(p1.z - p2.z, 2)
-//     );
-//     totalDistance += dist;
-//   });
-
-//   const averageDistance = totalDistance / pointsToCompare.length;
-//   // Threshold: 0.07 is usually a good balance for head movement
-//   return averageDistance < 0.07; 
-// }
-
-// // 4. The Detection Loop
-// async function predictWebcam() {
-//   if (!faceLandmarker || !video || !video.srcObject) return;
-
-//   const results = faceLandmarker.detectForVideo(video, performance.now());
-//   let shouldBlur = false;
-
-//   if (results.faceLandmarks.length === 0) {
-//     // Optional: Blur if no one is at the computer
-//     shouldBlur = false; 
-//   } 
-//   else if (results.faceLandmarks.length > 1) {
-//     // SNOOPER DETECTED: More than one face
-//     shouldBlur = true;
-//     console.log("Snooper detected: Multiple faces in frame.");
-//   } 
-//   else if (results.faceLandmarks.length === 1) {
-//     // Check if the single person is the owner
-//     const isOwner = isAuthorizedUser(results.faceLandmarks[0]);
-//     if (!isOwner) {
-//       shouldBlur = true;
-//       console.log("Snooper detected: Unknown face.");
-//     }
-//   }
-
-//   // Send result to background.js
-//   chrome.runtime.sendMessage({
-//     type: 'DETECTION_RESULT',
-//     shouldBlur: shouldBlur
-//   });
-
-//   // Continue loop
-//   window.requestAnimationFrame(predictWebcam);
-// }
-
-// if (document.readyState === 'complete') {
-//     initAI();
-// } else {
-//     window.addEventListener('load', initAI);
-// }
+    const visionBundleUrl = chrome.runtime.getURL('js-file/vision_bundle.js');
+    const module = await import(visionBundleUrl);
+    window.FilesetResolver = module.FilesetResolver;
+    window.FaceLandmarker = module.FaceLandmarker;
+    window.MediaPipeLoaded = true;
+    console.log('MediaPipe loaded successfully from local bundle.');
+}
 
 
-
-import { FaceLandmarker, FilesetResolver } from "./js-file/vision_bundle.js";
-
-let faceLandmarker;
-let video;
-let stream;
-let enrolledFaceData = null;
-
-// -----------------------------
-// 1. Listen for background messages
-// -----------------------------
-chrome.runtime.onMessage.addListener((message) => {
-  switch (message.action) {
-    case "PUSH_ENROLLED_DATA":
-      // Receive enrolled face data from background
-      enrolledFaceData = message.enrolledFace;
-      console.log("Face data synced from background!");
-
-      // Initialize AI only once
-      if (!faceLandmarker) initAI();
-      break;
-
-    case "STOP_AI":
-      stopCamera();
-      break;
-  }
-});
-
-// -----------------------------
-// 2. Initialize AI
-// -----------------------------
-async function initAI() {
-  if (!enrolledFaceData) {
-    console.warn("No enrolled face data yet. Waiting for PUSH_ENROLLED_DATA...");
+// Initialize MediaPipe Face Landmarker
+async function initializeFaceLandmarker() {
+  if (faceLandmarker) {
+    console.log('FaceLandmarker already initialized.');
     return;
   }
 
-  console.log("Initializing AI engine...");
-
   try {
-    // Load MediaPipe vision tasks
-    const vision = await FilesetResolver.forVisionTasks("./js-file");
+    // Load MediaPipe library
+    await loadMediaPipe();
 
-    // Create FaceLandmarker
-    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
-        delegate: "GPU"
-      },
-      runningMode: "VIDEO",
-      numFaces: 2
-    });
-
-    startCamera();
-  } catch (error) {
-    console.error("Critical error during AI initialization:", error);
-  }
-}
-
-// -----------------------------
-// 3. Camera Management
-// -----------------------------
-async function startCamera() {
-  video = document.getElementById('webcam');
-  if (!video) {
-    // Create a hidden video element if not present
-    video = document.createElement('video');
-    video.id = 'webcam';
-    video.autoplay = true;
-    video.style.display = 'none';
-    document.body.appendChild(video);
-  }
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    video.srcObject = stream;
-    video.addEventListener('loadeddata', predictWebcam);
-    console.log("Camera started successfully.");
-  } catch (err) {
-    console.error("Camera access denied in offscreen document:", err);
-  }
-}
-
-function stopCamera() {
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop());
-    video.srcObject = null;
-    console.log("Camera hardware released.");
-  }
-}
-
-// -----------------------------
-// 4. Face Comparison Logic
-// -----------------------------
-function isAuthorizedUser(liveFace) {
-  if (!enrolledFaceData || !liveFace) return false;
-
-  let totalDistance = 0;
-  const pointsToCompare = [1, 4, 152, 33, 263, 61, 291]; // key landmarks
-
-  pointsToCompare.forEach(index => {
-    const p1 = liveFace[index];
-    const p2 = enrolledFaceData[index];
-
-    const dist = Math.sqrt(
-      Math.pow(p1.x - p2.x, 2) +
-      Math.pow(p1.y - p2.y, 2) +
-      Math.pow(p1.z - p2.z, 2)
+    const vision = await FilesetResolver.forVisionTasks(
+      chrome.runtime.getURL('js-file')
     );
 
-    totalDistance += dist;
-  });
+    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: chrome.runtime.getURL('js-file/face_landmarker.task'),
+        delegate: 'GPU'
+      },
+      runningMode: 'VIDEO',
+      numFaces: 2, // Detect up to 2 faces to handle >1 face scenario
+      minFaceDetectionConfidence: 0.5,
+      minFacePresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+      outputFaceBlendshapes: false,
+      outputFacialTransformationMatrixes: false
+    });
 
-  const averageDistance = totalDistance / pointsToCompare.length;
-
-  // Threshold for face match
-  return averageDistance < 0.07;
+    console.log('MediaPipe FaceLandmarker initialized in offscreen document.');
+  } catch (error) {
+    console.error('Error initializing MediaPipe FaceLandmarker:', error);
+    chrome.runtime.sendMessage({
+      type: 'FACELANDMARKER_INIT_ERROR',
+      error: error.message
+    });
+  }
 }
 
-// -----------------------------
-// 5. Detection Loop
-// -----------------------------
-async function predictWebcam() {
-  if (!faceLandmarker || !video || !video.srcObject) return;
-
-  const results = faceLandmarker.detectForVideo(video, performance.now());
-  let shouldBlur = false;
-
-  if (results.faceLandmarks.length === 0) {
-    // No one detected
-    shouldBlur = false;
-  } else if (results.faceLandmarks.length > 1) {
-    // Multiple faces detected
-    shouldBlur = true;
-    console.log("Snooper detected: Multiple faces in frame.");
-  } else if (results.faceLandmarks.length === 1) {
-    // Single face: check if authorized
-    const isOwner = isAuthorizedUser(results.faceLandmarks[0]);
-    if (!isOwner) {
-      shouldBlur = true;
-      console.log("Snooper detected: Unknown face.");
-
-      chrome.runtime.sendMessage({
-        type: 'SHOW_NOTIFICATION',
-        title: 'Snooper Alert!',
-        message: 'Unknown face detected.'
-      });
-    }
-
+// Calculate Euclidean distance between two landmark sets
+function calculateEuclideanDistance(landmarksA, landmarksB) {
+  if (!landmarksA || !landmarksB || landmarksA.length !== landmarksB.length) {
+    return Infinity;
   }
 
-  // Send result to background
+  let sumOfSquaredDifferences = 0;
+  for (let i = 0; i < landmarksA.length; i++) {
+    sumOfSquaredDifferences += Math.pow(landmarksA[i].x - landmarksB[i].x, 2);
+    sumOfSquaredDifferences += Math.pow(landmarksA[i].y - landmarksB[i].y, 2);
+    sumOfSquaredDifferences += Math.pow(landmarksA[i].z - landmarksB[i].z, 2);
+  }
+  return Math.sqrt(sumOfSquaredDifferences);
+}
+
+// Process face detection results
+function processFaceLandmarkerResult(result) {
+  let shouldBlur = false;
+
+  if (!result || !result.faceLandmarks || result.faceLandmarks.length === 0) {
+    // No faces detected - no blur needed
+    shouldBlur = false;
+  } else if (result.faceLandmarks.length > 1) {
+    // More than one face detected - blur for privacy
+    shouldBlur = true;
+  } else {
+    // Exactly one face detected - compare with enrolled face
+    if (enrolledFaceLandmarks) {
+      const liveLandmarks = result.faceLandmarks[0];
+      const distance = calculateEuclideanDistance(liveLandmarks, enrolledFaceLandmarks);
+      const BLUR_THRESHOLD = 0.07;
+
+      if (distance > BLUR_THRESHOLD) {
+        shouldBlur = true; // Unrecognized face
+      } else {
+        shouldBlur = false; // Recognized face (enrolled user)
+      }
+    } else {
+      // No enrolled face data - blur by default
+      console.warn('No enrolled face data available for comparison. Blurring by default.');
+      shouldBlur = true;
+    }
+  }
+
+  // Send result to background service worker
   chrome.runtime.sendMessage({
     type: 'DETECTION_RESULT',
-    shouldBlur: shouldBlur
-  });
-
-  // Continue loop
-  window.requestAnimationFrame(predictWebcam);
-}
-
-// -----------------------------
-// 6. Start AI if DOM already loaded (optional fallback)
-// -----------------------------
-if (document.readyState === 'complete') {
-  // Wait for PUSH_ENROLLED_DATA message instead
-} else {
-  window.addEventListener('load', () => {
-    // Wait for PUSH_ENROLLED_DATA message instead
+    payload: { shouldBlur }
   });
 }
+
+// Start continuous face detection
+async function startContinuousDetection() {
+  const videoElement = document.getElementById('webcam');
+
+  if (!videoElement) {
+    console.error('Video element not found.');
+    return;
+  }
+
+  try {
+    // Get user media if not already available
+    if (!videoStream) {
+      videoStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 }
+      });
+      videoElement.srcObject = videoStream;
+      await videoElement.play();
+    }
+
+    // Detection loop using requestAnimationFrame
+    const detectFrame = async () => {
+      if (faceLandmarker && videoElement.readyState >= 2) {
+        const currentTime = performance.now();
+
+        // Only process if enough time has passed (avoid processing same frame)
+        if (currentTime !== lastVideoTime) {
+          lastVideoTime = currentTime;
+          const result = await faceLandmarker.detectForVideo(videoElement, currentTime);
+          processFaceLandmarkerResult(result);
+        }
+      }
+      animationFrameId = requestAnimationFrame(detectFrame);
+    };
+
+    detectFrame();
+    console.log('Continuous face detection started.');
+  } catch (error) {
+    console.error('Error setting up video stream for continuous detection:', error);
+  }
+}
+
+// Stop continuous detection and cleanup
+function stopContinuousDetection() {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+    console.log('Continuous detection loop stopped.');
+  }
+
+  // Stop camera tracks
+  if (videoStream) {
+    videoStream.getTracks().forEach(track => track.stop());
+    videoStream = null;
+    console.log('Camera tracks stopped.');
+  }
+
+  // Clear video element
+  const videoElement = document.getElementById('webcam');
+  if (videoElement) {
+    videoElement.srcObject = null;
+  }
+}
+
+// Listen for messages from background service worker
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'INIT_FACELANDMARKER_IN_OFFSCREEN') {
+    initializeFaceLandmarker()
+      .then(() => startContinuousDetection())
+      .then(() => sendResponse({ success: true }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  } else if (message.type === 'PUSH_DATA' && message.payload && message.payload.enrolledFace) {
+    enrolledFaceLandmarks = message.payload.enrolledFace;
+    console.log('Enrolled face data received in offscreen document.');
+    sendResponse({ success: true, message: 'Enrolled face received' });
+  } else if (message.type === 'STOP_MONITORING') {
+    stopContinuousDetection();
+    sendResponse({ success: true, message: 'Monitoring stopped and resources cleaned.' });
+  }
+});
+
+console.log('Privacy Shield AI - Offscreen document loaded.');

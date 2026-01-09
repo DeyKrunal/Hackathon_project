@@ -1,13 +1,132 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Register - Privacy Shield</title>
-    <script type="module" src="register.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Shield AI - Face Registration</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .register-container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 600px;
+      width: 100%;
+      text-align: center;
+    }
+    h1 {
+      color: #667eea;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    #webcam {
+      width: 100%;
+      max-width: 480px;
+      border-radius: 10px;
+      margin: 20px 0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .status {
+      padding: 15px;
+      border-radius: 8px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .status.info {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+    .status.success {
+      background: #e8f5e9;
+      color: #388e3c;
+    }
+    .status.error {
+      background: #ffebee;
+      color: #d32f2f;
+    }
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 15px 40px;
+      border-radius: 25px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      margin: 10px;
+    }
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .instructions {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 10px;
+      margin: 20px 0;
+      text-align: left;
+    }
+    .instructions h3 {
+      color: #667eea;
+      margin-top: 0;
+    }
+    .instructions ul {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+    .instructions li {
+      margin: 8px 0;
+      color: #555;
+    }
+  </style>
 </head>
-<body style="text-align: center; font-family: sans-serif;">
-    <h1>Create Your Secure Profile</h1>
-    <video id="regVideo" autoplay style="width: 400px; border-radius: 10px;"></video>
-    <div id="status">Adjust your face in the center of the frame...</div>
-    <button id="enrollBtn" disabled>Enroll My Face</button>
+<body>
+  <div class="register-container">
+    <h1>🛡️ Privacy Shield AI</h1>
+    <p class="subtitle">Face Registration</p>
+
+    <div class="instructions">
+      <h3>Instructions:</h3>
+      <ul>
+        <li>Position your face in the center of the camera</li>
+        <li>Ensure good lighting conditions</li>
+        <li>Look directly at the camera</li>
+        <li>Wait for face detection confirmation</li>
+        <li>Click "Enroll Face" to save your profile</li>
+      </ul>
+    </div>
+
+    <video id="webcam" autoplay playsinline></video>
+
+    <div id="status" class="status info">
+      Initializing camera...
+    </div>
+
+    <button id="enrollBtn" disabled>Enroll Face</button>
+    <button id="retryBtn" style="display: none;">Retry</button>
+
+    <script src="register.js"></script>
+  </div>
 </body>
 </html>
