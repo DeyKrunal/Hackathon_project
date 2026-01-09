@@ -201,11 +201,6 @@
   async function initModel() {
     updateStatusWidget('initializing', 'Loading AI model...');
 
-    // Polyfill for MediaPipe WASM debugging (fixes ReferenceError: custom_dbg is not defined)
-    self.custom_dbg = (x) => console.log('[WASM DBG]', x);
-    self.custom_println = (x) => console.log('[WASM LOG]', x);
-    self.custom_emscripten_dbgn = (x) => console.log('[WASM EM_DBG]', x);
-
     // Load the vision ESM bundle directly in content script context (not page context)
     const base = chrome.runtime.getURL('lib/js-file');
     const moduleUrl = chrome.runtime.getURL('lib/vision_bundle.mjs');
@@ -287,34 +282,6 @@
       } catch (mErr) {
         console.warn('Model fetch failed in content script', mErr);
       }
-
-      // Ensure ModuleFactory is present: import loader module directly
-      updateStatusWidget('initializing', 'Preparing runtime...');
-      async function ensureModuleFactory() {
-        if (typeof self.ModuleFactory === 'function') return;
-
-        const candidates = [base + '/vision_wasm_internal.mjs', base + '/vision_wasm_nosimd_internal.mjs'];
-        for (const src of candidates) {
-          try {
-            console.log('Importing loader module:', src);
-            const module = await import(src);
-            if (module && typeof module.ModuleFactory === 'function') {
-              self.ModuleFactory = module.ModuleFactory;
-              console.log('ModuleFactory loaded successfully from', src);
-              break;
-            }
-          } catch (e) {
-            console.warn('Failed to import loader:', src, e);
-          }
-        }
-
-        if (typeof self.ModuleFactory !== 'function') {
-          console.warn('ModuleFactory still not set after module import');
-          updateStatusWidget('error', 'Runtime load failed');
-        }
-      }
-
-      await ensureModuleFactory();
 
       // try GPU first, then CPU fallback
       updateStatusWidget('initializing', 'Creating face detector...');

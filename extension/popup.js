@@ -154,41 +154,6 @@
         // Don't throw — we'll still try createFromOptions which may attempt its own fetch and show clearer errors
       }
 
-      // Ensure ModuleFactory is present by injecting loader scripts and assigning it if available
-      async function ensureModuleFactory() {
-        const candidates = [base + '/vision_wasm_internal.js', base + '/vision_wasm_nosimd_internal.js'];
-        for (const src of candidates) {
-          try {
-            if (!document.querySelector(`script[src="${src}"]`)) {
-              await new Promise((resolve, reject) => {
-                const s = document.createElement('script');
-                s.src = src;
-                s.crossOrigin = 'anonymous';
-                s.onload = () => resolve();
-                s.onerror = (e) => reject(e);
-                (document.head || document.documentElement).appendChild(s);
-              });
-              log('Injected loader script: ' + src);
-            }
-          } catch (injectErr) {
-            console.warn('Loader injection failed for', src, injectErr);
-          }
-
-          if (typeof self.ModuleFactory !== 'function' && typeof window.ModuleFactory === 'function') {
-            self.ModuleFactory = window.ModuleFactory;
-            log('Assigned ModuleFactory from window.ModuleFactory');
-          }
-
-          if (typeof self.ModuleFactory === 'function') break;
-        }
-
-        if (typeof self.ModuleFactory !== 'function') {
-          log('ModuleFactory still not set after loader injection', 'error');
-        }
-      }
-
-      await ensureModuleFactory();
-
       // Try GPU delegate first, fallback to CPU if GPU fails
       async function tryCreate(delegate) {
         try {
